@@ -1,2 +1,2 @@
-# K-nstliche-Intelligenz---12.-klassarbeit
+# Artificial intelligence
 In this Repository are a bunch of additional Files for my 12. grade paper.
