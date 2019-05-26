@@ -12,9 +12,7 @@ alpha = 0.1
 gamma = 1
 
 # Q[state] = (Nicht springen, springen)
-Q = None  # defaultdict(lambda: [0, 0])
-
-with open("Q/Q.pickle", "rb") as file:
+with open("/Users/johann/github/Artificial_intelligence/Reinforcement Learning/Flappy Birds/Q/Q.pickle", "rb") as file:
     Q = defaultdict(lambda: [0, 0], pickle.load(file))
 
 def paramsToState(params):
