@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+#!/Users/johann/anaconda3/bin/python
 
 import flappy_headless
 import numpy as np
@@ -16,7 +16,7 @@ Q = defaultdict(lambda: [0, 0])
 
 
 def paramsToState(params):
-    playerVelY = params["playerVelY"]
+    playerVelY = params['playerVelY']
     playery = params["playery"]
 
     if int(params["upperPipes"][0]['x']) < 56:
@@ -47,6 +47,8 @@ def onGameover(gameInfo):
     if gameCounter % 100 == 0:
         print(str(gameCounter) + ": " + str(np.mean(gameScores[-100:])))
 
+    # Q updaten für die vorherige Aktion
+    #  -> Die vorherige Aktion war nicht erfolgreich!
     prevReward = Q[oldState]
     index = None
     if oldAction == False:
@@ -75,6 +77,9 @@ def shouldEmulateKeyPress(params):
     state = paramsToState(params)
     estReward = Q[state]
 
+
+    # Q updaten für die vorherige Aktion
+    #  -> Die vorherige Aktion war erfolgreich!
     prevReward = Q[oldState]
     index = None
     if oldAction == False:

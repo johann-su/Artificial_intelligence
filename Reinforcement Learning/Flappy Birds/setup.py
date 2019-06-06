@@ -1,3 +1,5 @@
+#!/Users/johann/anaconda3/bin/python
+
 import os
 import sys
 from distutils.core import setup

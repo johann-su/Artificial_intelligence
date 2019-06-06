@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+#!/Users/johann/anaconda3/bin/python
 
 import flappy
 import numpy as np

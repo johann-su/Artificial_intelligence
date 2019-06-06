@@ -1,8 +1,11 @@
+#!/Users/johann/anaconda3/bin/python
+
 import os
 import gzip
 import numpy as np
+import matplotlib.pyplot as plt
 from keras.models import Sequential, load_model
-from keras.layers import Conv2D, MaxPooling2D, Dense, Flatten
+from keras.layers import Conv2D, Dropout, Dense, Flatten, MaxPooling2D
 from keras.utils import to_categorical
 
 # The path to the Dataset (change to your path)
@@ -37,14 +40,17 @@ y_test = to_categorical(y_test)
 
 outcomes = y_train.shape[1]
 
-# Training the Model
-model = Sequential()
+# Training the Model (Training will take some time. Use the prepared model for faster results. Comment the load Model part to skip Training)
+"""model = Sequential()
 
 model.add(Conv2D(64, kernel_size=(5, 5), input_shape=(28, 28, 1), activation="relu"))
 model.add(Conv2D(64, kernel_size=(5, 5), activation="relu"))
+model.add(MaxPooling2D(pool_size=(2, 2)))
+model.add(Dropout(0.20))
 
 model.add(Conv2D(32, kernel_size=(5, 5), activation="relu"))
 model.add(Conv2D(32, kernel_size=(5, 5), activation="relu"))
+model.add(Dropout(0.20))
 
 model.add(Flatten())
 
@@ -55,10 +61,19 @@ model.compile(optimizer="Adam", loss="categorical_crossentropy", metrics=["accur
 print(model.summary())
 
 model.fit(X_train, y_train, batch_size=32, epochs=8)
-model.evaluate(X_test, y_test, batch_size=32)
+print(model.evaluate(X_test, y_test, batch_size=32))
 
-model.save('mnist_model.h5')
+model.save('mnist_model.h5')"""
 
-# Loading the Model
+# Loading the Model (The prepaerd Model - ready to use. Comment the model part above)
 model = load_model('/Users/johann/github/Artificial_intelligence/Deep Learning/mnist/mnist_model.h5')
 model.summary()
+
+#Predict an Image
+%matplotlib inline
+im_id = 1
+
+plt.imshow(X_test[im_id].reshape(28, 28), cmap="gray_r")
+plt.show()
+print("Label: " + str(y_test[im_id]))
+print("Model output: " + str(model.predict(X_test[im_id].reshape(-1, 28, 28, 1), batch_size=32)))
