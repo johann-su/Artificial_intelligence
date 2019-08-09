@@ -4,81 +4,152 @@
 # -Experience Replay
 # -DQN Algorithm Q(state, action) = r + y * max(Q(state', action'))
 
-# importing the packages
+# https://github.com/gsurma/cartpole
+# https://towardsdatascience.com/cartpole-introduction-to-reinforcement-learning-ed0eb5b58288
+# https://www.youtube.com/watch?v=t3fbETsIBCY
+# https://www.youtube.com/watch?v=qfovbG84EBg&list=PLQVvvaa0QuDezJFIOU5wDdfy4e9vdnx-7&index=6
+
+# importing nessecary libaries
+import random
 import gym
 import numpy as np
 from collections import deque
-import random
-
+import keras.backend.tensorflow_backend as backend
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 from keras.callbacks import TensorBoard
+import tensorflow as tf
 
-# creating the environment
-env = gym.make('CartPole-v1')
+# defining variables
+ENV_NAME = "CartPole-v1" # enviornment
 
-#defining global variables
-lr=0.0001
-decay=0.001
-batch_size=10
-Gamma = 0.1
+GAMMA = 0.95 # einfluss
+LEARNING_RATE = 0.001
 
-# creating a deep learning model with keras
-model = Sequential()
+MEMORY_SIZE = 1000000 # deque maxlen
+BATCH_SIZE = 20
 
-model.add(Dense(64, input_shape=env.OBSERVATION_SPACE_VALUES, activation='relu'))
-model.add(Dense(32, activation='relu'))
-model.add(Dense(16, activation='relu'))
+EXPLORATION_MAX = 1.0
+EXPLORATION_MIN = 0.01
+EXPLORATION_DECAY = 0.995
 
-model.add(Dense(env.ACTION_SPACE_SIZE, activation='linear'))
+# Own Tensorboard class (https://pythonprogramming.net/training-deep-q-learning-dqn-reinforcement-learning-python-tutorial/)
+class ModifiedTensorBoard(TensorBoard):
 
-model.compile(Adam(lr=lr, decay=decay), loss='mse')
-model.summary()
+    # Overriding init to set initial step and writer (we want one log file for all .fit() calls)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.step = 1
+        self.writer = tf.summary.FileWriter(self.log_dir)
 
-memory = deque()
+    # Overriding this method to stop creating default log writer
+    def set_model(self, model):
+        pass
 
-# running the game
-while True:
-    env.reset()
+    # Overrided, saves logs with our step number
+    # (otherwise every .fit() will start writing from 0th step)
+    def on_epoch_end(self, epoch, logs=None):
+        self.update_stats(**logs)
+
+    # Overrided
+    # We train for one batch only, no need to save anything at epoch end
+    def on_batch_end(self, batch, logs=None):
+        pass
+
+    # Overrided, so won't close writer
+    def on_train_end(self, _):
+        pass
+
+    # Custom method for saving own metrics
+    # Creates writer, writes custom metrics and closes writer
+    def update_stats(self, **stats):
+        self._write_logs(stats, self.step)
+
+
+class DQNSolver:
+
+    def __init__(self, observation_space, action_space):
+        #defining the exploration rate
+        self.exploration_rate = EXPLORATION_MAX
+
+        # definng the action space
+        self.action_space = action_space
+        self.memory = deque(maxlen=MEMORY_SIZE)
+
+        # creating the model
+        self.model = Sequential()
+        self.model.add(Dense(32, input_shape=(observation_space,), activation="relu"))
+        self.model.add(Dense(32, activation="relu"))
+        self.model.add(Dense(self.action_space, activation="linear"))
+        self.model.compile(loss="mse", optimizer=Adam(lr=LEARNING_RATE))
+
+        # tensorboard for analytics
+        self.tensorboard = ModifiedTensorBoard(log_dir="Reinforcement Learning/gym/logsA")
+
+
+    # adding new values to the memory
+    def update_memory(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
+
+    # predicting or choosing a random action
+    def act(self, state):
+        # random action
+        if np.random.rand() < self.exploration_rate:
+            return random.randrange(self.action_space)
+        # predicting an action
+        q_values = self.model.predict(state)
+        # returning the best q-value
+        return np.argmax(q_values[0])
+
+    # choosing a random sample from memory to train the model after a game
+    def experience_replay(self):
+        # memory too small
+        if len(self.memory) < BATCH_SIZE:
+            return
+        # taking a random sample (how many depends on BATCH_SIZE)
+        batch = random.sample(self.memory, BATCH_SIZE)
+        for state, action, reward, state_next, terminal in batch:
+            q_update = reward
+            if not terminal:
+                q_update = (reward + GAMMA * np.amax(self.model.predict(state_next)[0]))
+            q_values = self.model.predict(state)
+            q_values[0][action] = q_update
+            self.model.fit(state, q_values, verbose=0, callbacks=[self.tensorboard])
+        self.exploration_rate *= EXPLORATION_DECAY
+        self.exploration_rate = max(EXPLORATION_MIN, self.exploration_rate)
+
+# the actual game
+def cartpole():
+    env = gym.make(ENV_NAME)
+    observation_space = env.observation_space.shape[0]
+    action_space = env.action_space.n
+    dqn_solver = DQNSolver(observation_space, action_space)
+    # setting episodes to zero
+    run = 0
     while True:
-        env.render()
-        action = env.action_space.sample()
-        observation, reward, done, info = env.step(action)
+        run += 1
+        state = env.reset()
+        state = np.reshape(state, [1, observation_space])
+        # setting step to zero
+        step = 0
+        while True:
+            step += 1
+            env.render()
+            action = dqn_solver.act(state)
+            state_next, reward, terminal, info = env.step(action)
+            reward = reward if not terminal else -reward
+            state_next = np.reshape(state_next, [1, observation_space])
+            dqn_solver.update_memory(state, action, reward, state_next, terminal)
+            state = state_next
+            if terminal:
+                print ("Run: " + str(run) + ", exploration: " + str(dqn_solver.exploration_rate) + ", score: " + str(step))
+                break
+            dqn_solver.experience_replay()
 
-        # observation = ndarray float64
-        # reward = float
-        # done = bool
-        # action = int
-        # info = empty
-        # ------------------------------------------------
-        #
-        # Observation:
-        # Type: Box(4)
-        # Num	Observation            Min            Max
-        # 0	Cart Position             -4.8            4.8
-        # 1	Cart Velocity             -Inf            Inf
-        # 2	Pole Angle                 -24°           24°
-        # 3	Pole Velocity At Tip      -Inf            Inf
-        #
-        # Action:
-        # Type: Discrete(2)
-        # Num	Action
-        # 0	Push cart to the left
-        # 1	Push cart to the right
+    if run % 10 == 0:
+        self.model.save(f'Reinforcement Learning/gym/models/CartPole-v1_{step}.h5')
 
-        observation = np.asarray(observation)
-        reward = np.asarray(reward)
-        action = np.asarray(action)
 
-        memory.appendleft((observation, reward, action))
-
-        if len(memory) > batch_size:
-            rand_sample = random.sample(memory, batch_size)
-
-            model.fit(np.expand_dims(observation, axis=0), np.expand_dims(action, axis=0), verbose=0)
-            action = (reward + Gamma + np.max(model.predict(observation, verbose=0)))
-
-        if done:
-            break
-env.close()
+if __name__ == "__main__":
+    cartpole()
