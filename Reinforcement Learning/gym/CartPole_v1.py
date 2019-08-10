@@ -1,8 +1,8 @@
 #!/Users/johann/anaconda3/bin/python
 
 # To-do:
-# -Experience Replay
-# -DQN Algorithm Q(state, action) = r + y * max(Q(state', action'))
+# -TensorBoard implementation
+# -find good hyperparameters
 
 # https://github.com/gsurma/cartpole
 # https://towardsdatascience.com/cartpole-introduction-to-reinforcement-learning-ed0eb5b58288
@@ -10,29 +10,47 @@
 # https://www.youtube.com/watch?v=qfovbG84EBg&list=PLQVvvaa0QuDezJFIOU5wDdfy4e9vdnx-7&index=6
 
 # importing nessecary libaries
+import os
+import time
 import random
 import gym
 import numpy as np
 from collections import deque
 import keras.backend.tensorflow_backend as backend
 from keras.models import Sequential
-from keras.layers import Dense
+from keras.layers import Dense, Dropout, BatchNormalization
 from keras.optimizers import Adam
 from keras.callbacks import TensorBoard
 import tensorflow as tf
+from sklearn.model_selection import RandomizedSearchCV
+
+# params = {'GAMMA':[0.5, 0.6, 0.7, 0.8, 0.9],
+#         'LEARNING_RATE':[0.1, 0.01, 0.001, 0.0001],
+#         'BATCH_SIZE':[10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140],
+#         'EXPLORATION_MIN':[0.1, 0.5, 0.01, 0.05, 0.001, 0.005, 0.0001, 0.0005],
+#         'EXPLORATION_DECAY':[0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 0.99]}
+#
+# rscv = RandomizedSearchCV(estimator=step, param_distributions=params, n_iter=100, scoring=x, n_jobs=-1, verbose=0)
 
 # defining variables
 ENV_NAME = "CartPole-v1" # enviornment
 
-GAMMA = 0.95 # einfluss
+GAMMA = 0.87 # einfluss
 LEARNING_RATE = 0.001
+DECAY = 0.1
 
 MEMORY_SIZE = 1000000 # deque maxlen
-BATCH_SIZE = 20
+BATCH_SIZE = 64
 
 EXPLORATION_MAX = 1.0
-EXPLORATION_MIN = 0.01
-EXPLORATION_DECAY = 0.995
+EXPLORATION_MIN = 0.001
+EXPLORATION_DECAY = 0.99 # higher is faster
+
+try:
+    os.remove('Reinforcement Learning/gym/models/')
+    os.remove('Reinforcement Learning/gym/logs/')
+except:
+    pass
 
 # Own Tensorboard class (https://pythonprogramming.net/training-deep-q-learning-dqn-reinforcement-learning-python-tutorial/)
 class ModifiedTensorBoard(TensorBoard):
@@ -77,15 +95,29 @@ class DQNSolver:
         self.action_space = action_space
         self.memory = deque(maxlen=MEMORY_SIZE)
 
+        self.all_steps = []
+
         # creating the model
         self.model = Sequential()
-        self.model.add(Dense(32, input_shape=(observation_space,), activation="relu"))
-        self.model.add(Dense(32, activation="relu"))
+
+        self.model.add(Dense(64, input_shape=(observation_space,), activation="elu"))
+        self.model.add(Dense(64, activation="elu"))
+        # self.model.add(BatchNormalization())
+        self.model.add(Dropout(0.3))
+
+        self.model.add(Dense(32, activation="elu"))
+        self.model.add(Dense(32, activation="elu"))
+        self.model.add(Dropout(0.3))
+
+        self.model.add(Dense(16, activation="elu"))
+        self.model.add(Dense(8, activation="elu"))
+        self.model.add(Dropout(0.3))
+
         self.model.add(Dense(self.action_space, activation="linear"))
-        self.model.compile(loss="mse", optimizer=Adam(lr=LEARNING_RATE))
+        self.model.compile(loss="mse", optimizer=Adam(lr=LEARNING_RATE, decay=DECAY, amsgrad=False))
 
         # tensorboard for analytics
-        self.tensorboard = ModifiedTensorBoard(log_dir="Reinforcement Learning/gym/logsA")
+        self.tensorboard = ModifiedTensorBoard(log_dir="Reinforcement Learning/gym/logs/")
 
 
     # adding new values to the memory
@@ -119,6 +151,13 @@ class DQNSolver:
         self.exploration_rate *= EXPLORATION_DECAY
         self.exploration_rate = max(EXPLORATION_MIN, self.exploration_rate)
 
+    def save_model(self, run, step):
+        self.all_steps.append(step)
+        if run % 10 == 0:
+            self.model.save(f'Reinforcement Learning/gym/models/CartPole-v1_{int(np.mean(self.all_steps))}.h5')
+        if len(self.all_steps) == 10:
+            self.all_steps = []
+
 # the actual game
 def cartpole():
     env = gym.make(ENV_NAME)
@@ -127,6 +166,7 @@ def cartpole():
     dqn_solver = DQNSolver(observation_space, action_space)
     # setting episodes to zero
     run = 0
+    dqn_solver.tensorboard.step = run
     while True:
         run += 1
         state = env.reset()
@@ -144,11 +184,12 @@ def cartpole():
             state = state_next
             if terminal:
                 print ("Run: " + str(run) + ", exploration: " + str(dqn_solver.exploration_rate) + ", score: " + str(step))
+                dqn_solver.save_model(run, step)
+                dqn_solver.tensorboard.update_stats(score=step)
                 break
             dqn_solver.experience_replay()
 
-    if run % 10 == 0:
-        self.model.save(f'Reinforcement Learning/gym/models/CartPole-v1_{step}.h5')
+
 
 
 if __name__ == "__main__":
