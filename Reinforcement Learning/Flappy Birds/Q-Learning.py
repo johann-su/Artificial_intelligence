@@ -64,7 +64,7 @@ def onGameover(gameInfo):
     oldAction = None
 
     if gameCounter % 10000 == 0:
-        with open("Q/" + str(gameCounter) + ".pickle", "wb") as file:
+        with open("Reinforcement Learning/flappy birds/Q/" + str(gameCounter) + ".pickle", "wb") as file:
             pickle.dump(dict(Q), file)
 
     gameCounter+=1
