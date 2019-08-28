@@ -47,16 +47,16 @@ ENV_NAME = "CartPole-v1" # enviornment
 
 GAMMA = 0.95 # discount factor
 LEARNING_RATE = 0.001
-DECAY = 0.0001
+DECAY = 0.00001
 
 MEMORY_SIZE = 1000000 # deque maxlen
-BATCH_SIZE = 40
+BATCH_SIZE = 30
 
 EXPLORATION_MAX = 1.0
 EXPLORATION_MIN = 0.01
 EXPLORATION_DECAY = 0.995 # higher is slower
 
-UPDATE_MODEL = 10
+UPDATE_MODEL = 5
 
 # try:
 #     os.remove('Reinforcement Learning/gym/models/')
@@ -123,10 +123,6 @@ class DQNSolver:
         self.model.add(Dense(48, activation="elu"))
         self.model.add(Dropout(0.2))
 
-        self.model.add(Dense(24, activation="elu"))
-        self.model.add(Dense(24, activation="elu"))
-        self.model.add(Dropout(0.2))
-
         self.model.add(Dense(self.action_space, activation="linear"))
         self.model.compile(loss="mse", optimizer=Adam(lr=LEARNING_RATE, decay=DECAY, amsgrad=True))
 
@@ -137,16 +133,12 @@ class DQNSolver:
         self.target_model.add(Dense(48, activation="elu"))
         self.target_model.add(Dropout(0.2))
 
-        self.model.add(Dense(24, activation="elu"))
-        self.model.add(Dense(24, activation="elu"))
-        self.model.add(Dropout(0.2))
-
         self.target_model.add(Dense(self.action_space, activation="linear"))
-        self.target_model.compile(loss="mse", optimizer=Adam())
+        self.target_model.compile(loss="mse", optimizer=Adam(lr=LEARNING_RATE, decay=DECAY, amsgrad=True))
 
         if os.listdir("Reinforcement Learning/gym/models/"):
             self.model.load_weights('Reinforcement Learning/gym/models/CartPole-v1.h5')
-            self.model.load_weights('Reinforcement Learning/gym/models/CartPole_target-v1.h5')
+            self.target_model.load_weights('Reinforcement Learning/gym/models/CartPole_target-v1.h5')
             self.exploration_rate = EXPLORATION_MIN
 
         # tensorboard for analytics
@@ -178,21 +170,21 @@ class DQNSolver:
         for state, action, reward, state_next, terminal in batch:
             q_update = reward
             if not terminal:
-                q_update = (reward + GAMMA * np.amax(self.target_model.predict(state_next)[0]))
+                q_update = (reward + GAMMA * np.amax(self.model.predict(state_next)[0]))
             q_values = self.model.predict(state)
             q_values[0][action] = q_update
             self.model.fit(state, q_values, verbose=0, callbacks=[self.tensorboard])
         self.exploration_rate *= EXPLORATION_DECAY
         self.exploration_rate = max(EXPLORATION_MIN, self.exploration_rate)
 
+    def save_model(self):
+        self.model.save_weights('Reinforcement Learning/gym/models/CartPole-v1.h5')
+        self.model.save_weights('Reinforcement Learning/gym/models/CartPole_target-v1.h5')
+
     def update_weights(self, run):
         if run % UPDATE_MODEL == 0:
             weights = self.model.get_weights()
             self.target_model.set_weights(weights)
-
-    def save_model(self):
-        self.model.save_weights('Reinforcement Learning/gym/models/CartPole-v1.h5')
-        self.target_model.save_weights('Reinforcement Learning/gym/models/CartPole_target-v1.h5')
 
 # Train an Agent on the CartPole environment
 if MODE == 'Train':
@@ -212,7 +204,7 @@ if MODE == 'Train':
             step = 0
             while True:
                 step += 1
-                # env.render()
+                env.render()
                 action = dqn_solver.act(state)
                 state_next, reward, terminal, info = env.step(action)
                 reward = reward if not terminal else -reward
@@ -223,7 +215,7 @@ if MODE == 'Train':
                     print ("Run: " + str(run) + ", exploration: " + str(dqn_solver.exploration_rate) + ", score: " + str(step))
                     dqn_solver.update_weights(run)
                     dqn_solver.save_model()
-                    dqn_solver.tensorboard.update_stats(score=step, reward=np.mean(dqn_solver.all_rewards))
+                    dqn_solver.tensorboard.update_stats(score=step)
                     break
                 dqn_solver.experience_replay()
         env.close()
