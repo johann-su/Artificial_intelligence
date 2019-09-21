@@ -15,7 +15,7 @@ import sys
 import time
 import random
 import gym
-import pydot
+# import pydot
 import numpy as np
 from collections import deque
 import keras.backend.tensorflow_backend as backend
@@ -24,7 +24,7 @@ from keras.layers import Dense, Dropout
 from keras.optimizers import Adam
 from keras.callbacks import TensorBoard, ModelCheckpoint
 import tensorflow as tf
-from pynput.keyboard import Key, Listener
+# from pynput.keyboard import Key, Listener
 
 # choose the mode you want to run the programm in:
 #
@@ -39,18 +39,23 @@ from pynput.keyboard import Key, Listener
 #
 # mode: Manual
 # play the game yourself
+#
+# mode: Dev
+# Models isn´t saved, no Tensorboard Stats
+# Params: Render=True
 
-MODE = 'Train'
+MODE = 'Dev'
+RENDER=False
 
 # defining variables
 ENV_NAME = "CartPole-v1" # enviornment
 
 GAMMA = 0.95 # discount factor
 LEARNING_RATE = 0.001
-DECAY = 0.00001
+DECAY = 0.0001
 
-MEMORY_SIZE = 1000000 # deque maxlen
-BATCH_SIZE = 30
+MEMORY_SIZE = 100000000 # deque maxlen
+BATCH_SIZE = 100
 
 EXPLORATION_MAX = 1.0
 EXPLORATION_MIN = 0.01
@@ -119,7 +124,15 @@ class DQNSolver:
         # creating the model
         self.model = Sequential()
 
-        self.model.add(Dense(48, input_shape=(observation_space,), activation="elu"))
+        self.model.add(Dense(250, input_shape=(observation_space,), activation="elu"))
+        self.model.add(Dense(250, activation="elu"))
+        self.model.add(Dropout(0.4))
+
+        self.model.add(Dense(128, activation="elu"))
+        self.model.add(Dense(128, activation="elu"))
+        self.model.add(Dropout(0.3))
+
+        self.model.add(Dense(48, activation="elu"))
         self.model.add(Dense(48, activation="elu"))
         self.model.add(Dropout(0.2))
 
@@ -129,9 +142,17 @@ class DQNSolver:
 
         self.target_model = Sequential()
 
-        self.target_model.add(Dense(48, input_shape=(observation_space,), activation="elu"))
-        self.target_model.add(Dense(48, activation="elu"))
-        self.target_model.add(Dropout(0.2))
+        self.model.add(Dense(250, input_shape=(observation_space,), activation="elu"))
+        self.model.add(Dense(250, activation="elu"))
+        self.model.add(Dropout(0.4))
+
+        self.model.add(Dense(128, activation="elu"))
+        self.model.add(Dense(128, activation="elu"))
+        self.model.add(Dropout(0.3))
+
+        self.model.add(Dense(48, activation="elu"))
+        self.model.add(Dense(48, activation="elu"))
+        self.model.add(Dropout(0.2))
 
         self.target_model.add(Dense(self.action_space, activation="linear"))
         self.target_model.compile(loss="mse", optimizer=Adam(lr=LEARNING_RATE, decay=DECAY, amsgrad=True))
@@ -170,7 +191,7 @@ class DQNSolver:
         for state, action, reward, state_next, terminal in batch:
             q_update = reward
             if not terminal:
-                q_update = (reward + GAMMA * np.amax(self.model.predict(state_next)[0]))
+                q_update = (reward + GAMMA * np.amax(self.target_model.predict(state_next)[0]))
             q_values = self.model.predict(state)
             q_values[0][action] = q_update
             self.model.fit(state, q_values, verbose=0, callbacks=[self.tensorboard])
@@ -204,7 +225,7 @@ if MODE == 'Train':
             step = 0
             while True:
                 step += 1
-                env.render()
+                # env.render()
                 action = dqn_solver.act(state)
                 state_next, reward, terminal, info = env.step(action)
                 reward = reward if not terminal else -reward
@@ -296,6 +317,38 @@ elif MODE == 'hard_policy':
                 if done:
                     print(f'finished after {step} steps')
                     break
+        env.close()
+
+# Develop new Code
+if MODE == 'Dev':
+    def cartpole():
+        env = gym.make(ENV_NAME)
+        observation_space = env.observation_space.shape[0]
+        action_space = env.action_space.n
+        dqn_solver = DQNSolver(observation_space, action_space)
+        # setting episodes to zero
+        run = 0
+        while True:
+            run += 1
+            state = env.reset()
+            state = np.reshape(state, [1, observation_space])
+            # setting step to zero
+            step = 0
+            while True:
+                step += 1
+                if RENDER == True:
+                    env.render()
+                action = dqn_solver.act(state)
+                state_next, reward, terminal, info = env.step(action)
+                reward = reward if not terminal else -reward
+                state_next = np.reshape(state_next, [1, observation_space])
+                dqn_solver.update_memory(state, action, reward, state_next, terminal)
+                state = state_next
+                if terminal:
+                    print ("Run: " + str(run) + ", exploration: " + str(dqn_solver.exploration_rate) + ", score: " + str(step))
+                    dqn_solver.update_weights(run)
+                    break
+                dqn_solver.experience_replay()
         env.close()
 
 else:

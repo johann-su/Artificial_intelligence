@@ -1,5 +1,3 @@
-#!/Users/johann/anaconda3/bin/python
-
 '''Neural style transfer with Keras.
 Run the script with:
 ```
